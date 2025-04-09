@@ -1,9 +1,52 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import Image from "next/image";
 
 export default function Home() {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const initGraph = async () => {
+      if (containerRef.current) {
+        // Dynamically import these libraries only on the client side
+        const graphology = await import("graphology");
+        const Sigma = (await import("sigma")).default;
+
+        // Create a graphology graph
+        const graph = new graphology.default();
+        
+        // Add nodes
+        graph.addNode("1", { label: "Node 1", x: 0, y: 0, size: 10, color: "#4169E1" });
+        graph.addNode("2", { label: "Node 2", x: 1, y: 1, size: 20, color: "#DC143C" });
+        graph.addNode("3", { label: "Node 3", x: 0.5, y: 2, size: 15, color: "#2E8B57" });
+        
+        // Add edges
+        graph.addEdge("1", "2", { size: 5, color: "#9370DB" });
+        graph.addEdge("2", "3", { size: 3, color: "#9370DB" });
+        graph.addEdge("1", "3", { size: 2, color: "#9370DB" });
+
+        // Instantiate sigma.js and render the graph
+        new Sigma(graph, containerRef.current);
+      }
+    };
+
+    initGraph().catch(console.error);
+
+    // Cleanup function
+    return () => {
+      if (containerRef.current) {
+        // Clear the container
+        while (containerRef.current.firstChild) {
+          containerRef.current.removeChild(containerRef.current.firstChild);
+        }
+      }
+    };
+  }, []);
+
   return (
     <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
+      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start w-full">
         <Image
           className="dark:invert"
           src="/next.svg"
@@ -12,18 +55,14 @@ export default function Home() {
           height={38}
           priority
         />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+        
+        <h1 className="text-2xl font-bold">Scholar Map Graph Visualization</h1>
+        
+        {/* Sigma.js container */}
+        <div 
+          ref={containerRef}
+          className="w-full h-[600px] bg-white border border-gray-200 rounded-lg shadow-md"
+        ></div>
 
         <div className="flex gap-4 items-center flex-col sm:flex-row">
           <a
