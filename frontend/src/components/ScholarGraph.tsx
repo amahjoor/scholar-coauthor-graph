@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 
 // Declare the global window object with graphology property
 declare global {
@@ -11,8 +11,6 @@ declare global {
 
 // Simple controls component
 interface ControlsProps {
-  maxNodes: number;
-  setMaxNodes: (value: number) => void;
   minWeight: number;
   setMinWeight: (value: number) => void;
   onApply: () => void;
@@ -20,8 +18,6 @@ interface ControlsProps {
 }
 
 function Controls({ 
-  maxNodes, 
-  setMaxNodes, 
   minWeight, 
   setMinWeight, 
   onApply, 
@@ -29,19 +25,6 @@ function Controls({
 }: ControlsProps) {
   return (
     <div className="bg-white p-4 rounded-lg shadow mb-4 flex flex-col md:flex-row gap-4">
-      <div className="flex flex-col">
-        <label htmlFor="maxNodes" className="text-sm font-medium mb-1">Max Authors</label>
-        <input
-          id="maxNodes"
-          type="number"
-          min="5"
-          max="200"
-          value={maxNodes}
-          onChange={(e) => setMaxNodes(Number(e.target.value))}
-          className="border rounded px-2 py-1"
-        />
-      </div>
-      
       <div className="flex flex-col">
         <label htmlFor="minWeight" className="text-sm font-medium mb-1">Min Connection Strength</label>
         <input
@@ -94,7 +77,6 @@ export default function ScholarGraph() {
   const [error, setError] = useState<string | null>(null);
   
   // Graph configuration state
-  const [maxNodes, setMaxNodes] = useState(3);
   const [minWeight, setMinWeight] = useState(1);
   
   // Full dataset reference (loaded once)
@@ -111,6 +93,15 @@ export default function ScholarGraph() {
   const sigmaRef = useRef<any>(null);
   // Add mounting ref to prevent double initialization
   const isMountedRef = useRef<boolean>(false);
+  // Track currently highlighted node
+  const [highlightedNode, setHighlightedNode] = useState<string | null>(null);
+  // Create a ref to track the current highlighted node for access in callbacks
+  const highlightedNodeRef = useRef<string | null>(null);
+  
+  // Update the ref when state changes
+  useEffect(() => {
+    highlightedNodeRef.current = highlightedNode;
+  }, [highlightedNode]);
   
   // Function to get a color for a community
   const getColorForCommunity = (communityId: number): string => {
@@ -182,6 +173,11 @@ export default function ScholarGraph() {
           attributes.nodeType = attributes.type || attributes.nodeType; // Store original type
           attributes.type = 'circle';  // Set all nodes to use the circle program
         }
+        
+        // Add highlighting attributes
+        attributes.highlighted = false;
+        attributes.originalColor = attributes.color;
+        attributes.originalSize = attributes.size;
       });
       
       // Only run layout if coordinates are missing or on first load
@@ -242,6 +238,7 @@ export default function ScholarGraph() {
           <div>Community: ${nodeData.community || 0}</div>
           <div>Connections: ${nodeData.degree || 0}</div>
           ${nodeData.affiliation ? `<div>Affiliation: ${nodeData.affiliation}</div>` : ''}
+          <div class="text-xs text-blue-500 mt-1">Click to view connections only (click again to reset)</div>
         `;
         tooltipDiv.style.display = 'block';
         
@@ -267,12 +264,168 @@ export default function ScholarGraph() {
         }
       });
       
+      // Function to reset all highlighting and show all nodes
+      const resetAllHighlighting = () => {
+        console.log("Clearing all highlighting");
+        
+        resetHighlighting(graph);
+        setHighlightedNode(null);
+        highlightedNodeRef.current = null;
+        
+        // Make sure all nodes and edges are visible again
+        graph.forEachNode((n: string, attributes: any) => {
+          attributes.hidden = false;
+          attributes.color = attributes.originalColor;
+          attributes.size = attributes.originalSize;
+        });
+        
+        graph.forEachEdge((e: string, attributes: any) => {
+          attributes.hidden = false;
+          attributes.color = attributes.originalColor;
+          attributes.size = attributes.originalSize;
+        });
+        
+        renderer.refresh();
+      };
+      
+      // Create a dedicated handler for node clicks
+      const handleNodeClick = (node: string) => {
+        console.log("Node click handler called for:", node);
+        console.log("Current highlighted node:", highlightedNodeRef.current);
+        
+        // If clicking the same node again, reset the view
+        if (highlightedNodeRef.current === node) {
+          console.log("Same node clicked again, resetting view");
+          resetAllHighlighting();
+          return;
+        }
+        
+        console.log("New node clicked, showing only its connections");
+        
+        // Reset previous highlighting if any
+        if (highlightedNodeRef.current) {
+          resetHighlighting(graph);
+        }
+        
+        // Set the new highlighted node
+        setHighlightedNode(node);
+        highlightedNodeRef.current = node;  // Also update ref directly for immediate access
+        
+        // Create a set of nodes to keep visible
+        const visibleNodes = new Set<string>([node]);
+        
+        // Find all connected nodes and add them to the visible set
+        graph.forEachNeighbor(node, (neighbor: string) => {
+          visibleNodes.add(neighbor);
+        });
+        
+        // Hide all nodes not in the visible set by setting size to 0
+        graph.forEachNode((n: string, attributes: any) => {
+          if (visibleNodes.has(n)) {
+            // For visible nodes, enhance them
+            attributes.highlighted = true;
+            attributes.color = attributes.originalColor || attributes.color;
+            attributes.size = attributes.originalSize || attributes.size;
+            
+            // Make the clicked node bigger
+            if (n === node) {
+              attributes.size = (attributes.originalSize || attributes.size) * 1.5;
+            }
+          } else {
+            // Hide nodes not connected to the clicked node
+            attributes.highlighted = false;
+            attributes.hidden = true;
+            attributes.size = 0;
+          }
+        });
+        
+        // Hide edges not connected to the clicked node
+        graph.forEachEdge((e: string, attributes: any, source: string, target: string) => {
+          if (source === node || target === node) {
+            // Highlight edges connected to the clicked node
+            attributes.color = attributes.originalColor || attributes.color;
+            attributes.size = (attributes.originalSize || attributes.size) * 1.5;
+          } else {
+            // Hide other edges
+            attributes.hidden = true;
+            attributes.size = 0;
+          }
+        });
+        
+        // Refresh the renderer
+        renderer.refresh();
+      };
+      
+      // Attach the click handler to the renderer
+      renderer.on('clickNode', ({ node }) => {
+        handleNodeClick(node);
+      });
+      
+      // Add canvas click event to reset highlighting
+      renderer.getMouseCaptor().on('click', (e) => {
+        // Only handle clicks on the canvas (not on nodes)
+        if (!e.preventSigmaDefault && highlightedNodeRef.current) {
+          console.log("Empty space clicked, resetting view");
+          resetAllHighlighting();
+        }
+      });
+      
       setLoading(false);
     } catch (err) {
       console.error("Error initializing graph:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
       setLoading(false);
     }
+  };
+
+  // Function to reset highlighting
+  const resetHighlighting = (graph: any) => {
+    console.log("Resetting all highlighting");
+    
+    // Reset all node attributes to original values
+    graph.forEachNode((n: string, attributes: any) => {
+      attributes.highlighted = false;
+      attributes.hidden = false;
+      
+      // Make sure to restore original color and size
+      if (attributes.originalColor) {
+        attributes.color = attributes.originalColor;
+      }
+      
+      if (attributes.originalSize) {
+        attributes.size = attributes.originalSize;
+      }
+    });
+    
+    // Reset all edge attributes
+    graph.forEachEdge((e: string, attributes: any) => {
+      attributes.hidden = false;
+      
+      if (attributes.originalColor) {
+        attributes.color = attributes.originalColor;
+      }
+      
+      if (attributes.originalSize) {
+        attributes.size = attributes.originalSize;
+      }
+    });
+    
+    // Clear the highlighted node reference
+    highlightedNodeRef.current = null;
+  };
+  
+  // Function to fade a color for non-highlighted nodes
+  const fadeColor = (color: string): string => {
+    if (color.startsWith('#')) {
+      // Convert hex to rgba with transparency
+      const r = parseInt(color.slice(1, 3), 16);
+      const g = parseInt(color.slice(3, 5), 16);
+      const b = parseInt(color.slice(5, 7), 16);
+      return `rgba(${r}, ${g}, ${b}, 0.3)`;
+    } else if (color.startsWith('rgb')) {
+      return color.replace('rgb', 'rgba').replace(')', ', 0.3)');
+    }
+    return color;
   };
 
   // Function to load and parse GEXF data
@@ -341,6 +494,9 @@ export default function ScholarGraph() {
   const applyFilters = (sourceGraph?: any) => {
     setLoading(true);
     
+    // Reset any existing highlighting when filters are applied
+    setHighlightedNode(null);
+    
     setTimeout(async () => {
       try {
         // Use provided graph or the stored full data
@@ -361,25 +517,10 @@ export default function ScholarGraph() {
               filteredGraph.dropEdge(edge);
             }
           });
-        }
-        
-        // Filter by max nodes
-        if (maxNodes > 0 && maxNodes < filteredGraph.order) {
-          // Get all nodes with their degree
-          const nodes = filteredGraph.nodes().map((node: string) => ({
-            id: node,
-            degree: filteredGraph.degree(node)
-          }));
           
-          // Sort by degree (highest first)
-          nodes.sort((a: {id: string, degree: number}, b: {id: string, degree: number}) => b.degree - a.degree);
-          
-          // Keep only the top maxNodes
-          const nodesToKeep = new Set(nodes.slice(0, maxNodes).map((n: {id: string}) => n.id));
-          
-          // Remove nodes not in the top maxNodes
+          // Remove isolated nodes (no connections after edge filtering)
           filteredGraph.forEachNode((node: string) => {
-            if (!nodesToKeep.has(node)) {
+            if (filteredGraph.degree(node) === 0) {
               filteredGraph.dropNode(node);
             }
           });
@@ -429,8 +570,6 @@ export default function ScholarGraph() {
     <>
       {/* Controls for the graph */}
       <Controls 
-        maxNodes={maxNodes}
-        setMaxNodes={setMaxNodes}
         minWeight={minWeight}
         setMinWeight={setMinWeight}
         onApply={() => applyFilters()}
@@ -490,6 +629,11 @@ export default function ScholarGraph() {
           <h3 className="font-bold mb-2">Edge Darkness</h3>
           <p>Darker edges indicate stronger collaborations between authors (more papers together).</p>
         </div>
+      </div>
+
+      {/* Interaction tips */}
+      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-center">
+        Click on any author to show only their direct collaborations. Click the same author again or click empty space to reset.
       </div>
     </>
   );
