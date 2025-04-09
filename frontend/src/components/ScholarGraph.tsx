@@ -90,6 +90,9 @@ export default function ScholarGraph() {
   const [maxNodes, setMaxNodes] = useState(3);
   const [minWeight, setMinWeight] = useState(1);
   
+  // Full dataset reference (loaded once)
+  const [fullData, setFullData] = useState<{nodes: any[], edges: any[]} | null>(null);
+  
   // Stats for the graph
   const [stats, setStats] = useState({
     nodeCount: 0,
@@ -263,37 +266,73 @@ export default function ScholarGraph() {
     }
   };
 
-  // Function to fetch and render the graph
-  const fetchAndRenderGraph = async () => {
+  // Function to load static data and filter
+  const loadStaticData = async () => {
     if (!containerRef.current) return;
     
     try {
       setLoading(true);
       setError(null);
       
-      // Fetch coauthor data from API endpoint
-      const response = await fetch(`/api?endpoint=coauthors&maxNodes=${maxNodes}&minWeight=${minWeight}`);
+      // Load the static JSON data
+      const response = await fetch('/data/graph-data.json');
       if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.statusText}`);
+        throw new Error(`Failed to load graph data: ${response.statusText}`);
       }
       
       const data = await response.json();
       
-      // Update stats
-      setStats({
-        nodeCount: data.nodes.length,
-        edgeCount: data.edges.length,
-        communityCount: new Set(data.nodes.map((n: any) => n.community)).size
-      });
+      // Store the full dataset
+      setFullData(data);
       
-      // Render the graph
-      await renderGraph(data);
+      // Apply filters
+      applyFilters(data);
       
     } catch (err) {
-      console.error("Error fetching graph data:", err);
+      console.error("Error loading graph data:", err);
       setError(err instanceof Error ? err.message : "Unknown error");
       setLoading(false);
     }
+  };
+  
+  // Function to apply filters to dataset
+  const applyFilters = (sourceData?: {nodes: any[], edges: any[]}) => {
+    setLoading(true);
+    
+    // Use provided data or the stored full data
+    const data = sourceData || fullData;
+    if (!data) return;
+    
+    // Apply filters to the data
+    let filteredNodes = [...data.nodes];
+    
+    // Filter by max nodes (keep the largest ones by size/degree)
+    if (maxNodes > 0 && maxNodes < filteredNodes.length) {
+      filteredNodes = filteredNodes
+        .sort((a, b) => (b.size || 0) - (a.size || 0))
+        .slice(0, maxNodes);
+    }
+    
+    // Get IDs of nodes that passed the filter
+    const filteredNodeIds = new Set(filteredNodes.map(node => node.id));
+    
+    // Filter edges - keep only edges where both source and target are in filtered nodes
+    // and where the weight meets the minimum threshold
+    const filteredEdges = data.edges.filter(edge => 
+      filteredNodeIds.has(edge.source) && 
+      filteredNodeIds.has(edge.target) &&
+      edge.weight >= minWeight
+    );
+    
+    // Update stats
+    setStats({
+      nodeCount: filteredNodes.length,
+      edgeCount: filteredEdges.length,
+      communityCount: new Set(filteredNodes.map(n => n.community)).size
+    });
+    
+    // Render the filtered graph
+    renderGraph({nodes: filteredNodes, edges: filteredEdges});
   };
 
   // Initial load
@@ -302,7 +341,7 @@ export default function ScholarGraph() {
     // Only run once, even in React strict mode which calls effects twice
     if (!isMountedRef.current) {
       isMountedRef.current = true;
-      fetchAndRenderGraph();
+      loadStaticData();
     }
     
     // Cleanup function
@@ -320,7 +359,7 @@ export default function ScholarGraph() {
         setMaxNodes={setMaxNodes}
         minWeight={minWeight}
         setMinWeight={setMinWeight}
-        onApply={fetchAndRenderGraph}
+        onApply={() => applyFilters()}
         isLoading={loading}
       />
 
@@ -364,18 +403,18 @@ export default function ScholarGraph() {
       {/* Legend */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-sm mt-4">
         <div className="bg-blue-100 p-4 rounded-lg">
-          <h3 className="font-bold mb-2">Communities</h3>
-          <p>Nodes are colored by detected communities based on connection patterns.</p>
+          <h3 className="font-bold mb-2">Color Coding</h3>
+          <p>Each community has a unique color. Main authors have vibrant colors while co-authors have lighter shades of the same community color.</p>
         </div>
         
         <div className="bg-amber-100 p-4 rounded-lg">
           <h3 className="font-bold mb-2">Node Size</h3>
-          <p>Node size represents the number of co-author connections. Larger nodes have more connections.</p>
+          <p>Node size represents the number of connections. Larger nodes have more co-author relationships.</p>
         </div>
         
         <div className="bg-purple-100 p-4 rounded-lg">
-          <h3 className="font-bold mb-2">Edge Thickness</h3>
-          <p>Thicker edges indicate stronger connections between authors.</p>
+          <h3 className="font-bold mb-2">Edge Darkness</h3>
+          <p>Darker edges indicate stronger collaborations between authors (more papers together).</p>
         </div>
       </div>
     </>

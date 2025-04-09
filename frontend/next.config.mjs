@@ -23,6 +23,21 @@ const nextConfig = {
   
   // The global revalidate option is not supported in Next.js 15.2.5
   // We'll set it at the page level instead
+
+  // Use ISR for API routes for data that doesn't change often
+  async headers() {
+    return [
+      {
+        source: '/api',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400',
+          },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig; 

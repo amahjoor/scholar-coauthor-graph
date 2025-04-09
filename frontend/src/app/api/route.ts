@@ -2,6 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import fs from 'fs';
 import path from 'path';
 
+// Force static generation for this route
+export const dynamic = 'force-static';
+
+// Generate static params for the API route
+export function generateStaticParams() {
+  return [
+    { 
+      endpoint: 'coauthors',
+      maxNodes: '200',
+      minWeight: '1'
+    }
+  ];
+}
+
 // Define types for the coauthor data structure
 interface Coauthor {
   name: string;
