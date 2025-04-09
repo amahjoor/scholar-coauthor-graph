@@ -24,7 +24,7 @@ function Controls({
   isLoading
 }: ControlsProps) {
   return (
-    <div className="bg-white p-4 rounded-lg shadow mb-4 flex flex-col md:flex-row gap-4">
+    <div className="bg-white bg-opacity-90 p-4 rounded-lg shadow mb-4 flex flex-col md:flex-row gap-4 z-10">
       <div className="flex flex-col">
         <label htmlFor="minWeight" className="text-sm font-medium mb-1">Min Connection Strength</label>
         <input
@@ -567,33 +567,9 @@ export default function ScholarGraph() {
   }, []);
 
   return (
-    <>
-      {/* Controls for the graph */}
-      <Controls 
-        minWeight={minWeight}
-        setMinWeight={setMinWeight}
-        onApply={() => applyFilters()}
-        isLoading={loading}
-      />
-
-      {/* Graph stats */}
-      <div className="grid grid-cols-3 gap-4 w-full mb-4">
-        <div className="bg-blue-50 p-3 rounded-lg text-center">
-          <div className="text-lg font-bold">{stats.nodeCount}</div>
-          <div className="text-sm">Authors</div>
-        </div>
-        <div className="bg-green-50 p-3 rounded-lg text-center">
-          <div className="text-lg font-bold">{stats.edgeCount}</div>
-          <div className="text-sm">Connections</div>
-        </div>
-        <div className="bg-purple-50 p-3 rounded-lg text-center">
-          <div className="text-lg font-bold">{stats.communityCount}</div>
-          <div className="text-sm">Communities</div>
-        </div>
-      </div>
-      
-      {/* Sigma.js container - Add explicit width and height styles */}
-      <div className="relative w-full h-[700px] bg-white border border-gray-200 rounded-lg shadow-md" style={{ minWidth: '100px', minHeight: '100px' }}>
+    <div className="relative w-full h-screen">
+      {/* Sigma.js container - Take full screen */}
+      <div className="absolute inset-0 bg-white" style={{ minWidth: '100px', minHeight: '100px' }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-10">
             <div className="text-xl font-semibold">Loading co-author network...</div>
@@ -613,28 +589,59 @@ export default function ScholarGraph() {
         ></div>
       </div>
       
-      {/* Legend */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-sm mt-4">
-        <div className="bg-blue-100 p-4 rounded-lg">
-          <h3 className="font-bold mb-2">Color Coding</h3>
-          <p>Each community has a unique color. Main authors have vibrant colors while co-authors have lighter shades of the same community color.</p>
+      {/* Overlay controls in the top left */}
+      <div className="absolute top-4 left-4 z-20">
+        {/* Controls for the graph */}
+        <Controls 
+          minWeight={minWeight}
+          setMinWeight={setMinWeight}
+          onApply={() => applyFilters()}
+          isLoading={loading}
+        />
+      </div>
+      
+      {/* Graph stats as overlay in top right */}
+      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <div className="bg-blue-50 bg-opacity-90 p-2 rounded-lg text-center">
+            <div className="text-lg font-bold">{stats.nodeCount}</div>
+            <div className="text-sm">Authors</div>
+          </div>
+          <div className="bg-green-50 bg-opacity-90 p-2 rounded-lg text-center">
+            <div className="text-lg font-bold">{stats.edgeCount}</div>
+            <div className="text-sm">Connections</div>
+          </div>
+          <div className="bg-purple-50 bg-opacity-90 p-2 rounded-lg text-center">
+            <div className="text-lg font-bold">{stats.communityCount}</div>
+            <div className="text-sm">Communities</div>
+          </div>
         </div>
         
-        <div className="bg-amber-100 p-4 rounded-lg">
-          <h3 className="font-bold mb-2">Node Size</h3>
-          <p>Node size represents the number of connections. Larger nodes have more co-author relationships.</p>
-        </div>
-        
-        <div className="bg-purple-100 p-4 rounded-lg">
-          <h3 className="font-bold mb-2">Edge Darkness</h3>
-          <p>Darker edges indicate stronger collaborations between authors (more papers together).</p>
+        {/* Legend as info icon that displays info on hover */}
+        <div className="bg-white bg-opacity-90 p-3 rounded-lg text-sm">
+          <details className="cursor-pointer">
+            <summary className="font-bold">Display Legend</summary>
+            <div className="mt-2 grid grid-cols-1 gap-2">
+              <div className="bg-blue-100 p-2 rounded-lg">
+                <h3 className="font-bold">Color Coding</h3>
+                <p>Each community has a unique color. Main authors have vibrant colors while co-authors have lighter shades.</p>
+              </div>
+              <div className="bg-amber-100 p-2 rounded-lg">
+                <h3 className="font-bold">Node Size</h3>
+                <p>Node size represents the number of connections.</p>
+              </div>
+              <div className="bg-purple-100 p-2 rounded-lg">
+                <h3 className="font-bold">Edge Darkness</h3>
+                <p>Darker edges indicate stronger collaborations.</p>
+              </div>
+              <div className="bg-gray-100 p-2 rounded-lg">
+                <h3 className="font-bold">Interaction</h3>
+                <p>Click on any author to show only their direct collaborations. Click again to reset.</p>
+              </div>
+            </div>
+          </details>
         </div>
       </div>
-
-      {/* Interaction tips */}
-      <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm text-center">
-        Click on any author to show only their direct collaborations. Click the same author again or click empty space to reset.
-      </div>
-    </>
+    </div>
   );
 } 
