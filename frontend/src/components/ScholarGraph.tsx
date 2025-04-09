@@ -55,7 +55,7 @@ function Controls({
                 onChange={(e) => setMinWeight(Number(e.target.value))}
                 className="border border-gray-300 rounded px-2 py-1 w-14 text-center"
               />
-              <span className="text-xs text-gray-600 whitespace-nowrap">min papers</span>
+              <span className="text-xs text-gray-700 whitespace-nowrap">min papers</span>
             </div>
             <button 
               onClick={onApply} 
@@ -81,7 +81,7 @@ function Controls({
               )}
             </button>
           </div>
-          <div className="text-xs text-gray-500 mt-1 max-w-xs">
+          <div className="text-xs text-gray-700 mt-1 max-w-xs">
             Shows connections with at least {minWeight} paper{minWeight > 1 ? 's' : ''} together
           </div>
         </div>
@@ -97,7 +97,7 @@ function Controls({
             <div className="w-4 h-4 rounded-full border border-gray-300 bg-gradient-to-b from-blue-500 via-purple-500 to-red-500 shadow-sm"></div>
           </div>
           <span className="text-sm font-medium text-gray-700">{stats.nodeCount.toLocaleString()} Authors</span>
-          <div className="absolute bottom-full left-0 mb-1 w-48 bg-black bg-opacity-75 text-white text-xs rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className="absolute bottom-full left-0 mb-1 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none shadow-lg">
             Authors are represented as nodes in the graph
           </div>
         </div>
@@ -106,7 +106,7 @@ function Controls({
             <div className="w-5 h-0.5 bg-gray-300"></div>
           </div>
           <span className="text-sm font-medium text-gray-700">{stats.edgeCount.toLocaleString()} Connections</span>
-          <div className="absolute bottom-full left-0 mb-1 w-48 bg-black bg-opacity-75 text-white text-xs rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className="absolute bottom-full left-0 mb-1 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none shadow-lg">
             Lines connecting authors who have published together
           </div>
         </div>
@@ -117,7 +117,7 @@ function Controls({
             <div className="absolute w-2.5 h-2.5 rounded-full bg-green-500 top-0 left-4 shadow-sm"></div>
           </div>
           <span className="text-sm font-medium text-gray-700">{stats.communityCount.toLocaleString()} Communities</span>
-          <div className="absolute bottom-full left-0 mb-1 w-48 bg-black bg-opacity-75 text-white text-xs rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+          <div className="absolute bottom-full left-0 mb-1 w-48 bg-gray-800 text-white text-xs rounded p-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none shadow-lg">
             Groups of authors who frequently collaborate (color-coded)
           </div>
         </div>
@@ -351,7 +351,7 @@ export default function ScholarGraph() {
       // Add hover event to display node information
       let timeout: NodeJS.Timeout;
       const tooltipDiv = document.createElement('div');
-      tooltipDiv.className = 'absolute hidden bg-white p-2 rounded shadow-lg text-sm z-10';
+      tooltipDiv.className = 'absolute hidden bg-white p-3 rounded shadow-lg text-sm z-10 border border-gray-200';
       containerRef.current.appendChild(tooltipDiv);
       
       renderer.on('enterNode', ({ node }) => {
@@ -362,12 +362,12 @@ export default function ScholarGraph() {
         const authorType = nodeData.nodeType || nodeData.type || 'secondary';
         
         tooltipDiv.innerHTML = `
-          <div class="font-bold">${nodeData.label}</div>
-          <div>Type: ${authorType === 'primary' ? 'Main Author' : 'Co-Author'}</div>
-          <div>Community: ${nodeData.community || 0}</div>
-          <div>Connections: ${nodeData.degree || 0}</div>
-          ${nodeData.affiliation ? `<div>Affiliation: ${nodeData.affiliation}</div>` : ''}
-          <div class="text-xs text-blue-500 mt-1">Click to view connections only (click again to reset)</div>
+          <div class="font-bold text-gray-900">${nodeData.label}</div>
+          <div class="text-gray-800">Type: ${authorType === 'primary' ? 'Main Author' : 'Co-Author'}</div>
+          <div class="text-gray-800">Community: ${nodeData.community || 0}</div>
+          <div class="text-gray-800">Connections: ${nodeData.degree || 0}</div>
+          ${nodeData.affiliation ? `<div class="text-gray-800">Affiliation: ${nodeData.affiliation}</div>` : ''}
+          <div class="text-xs text-blue-600 mt-1">Click to view connections only (click again to reset)</div>
         `;
         tooltipDiv.style.display = 'block';
         
@@ -715,8 +715,10 @@ export default function ScholarGraph() {
         )}
         
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10">
-            <div className="text-xl font-semibold text-red-600">Error: {error}</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-90 z-10">
+            <div className="text-xl font-semibold text-red-700 p-4 bg-red-50 rounded-lg border border-red-200 shadow-md">
+              Error: {error}
+            </div>
           </div>
         )}
         
