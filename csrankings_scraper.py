@@ -271,104 +271,79 @@ def scrape_csrankings(area=None, country=None, output_file="csrankings_data.json
         # Extract researcher data
         researchers = []
         
-        # Direct approach: Find all rows in the main tbody that contains the ranking table
-        # This is usually the tbody with the most rows
-        print("Locating researcher table...")
+        # Direct approach to find researcher entries
+        print("Extracting researchers directly from name mapping...")
         
-        # Get all tbody elements
-        tbodies = soup.select("table.table-sm tbody")
+        # Use the researcher institution mapping to extract researchers directly
+        processed_count = 0
         
-        # Find the tbody with the most rows (likely the main ranking table)
-        main_tbody = None
-        max_rows = 0
-        for i, tbody in enumerate(tbodies):
-            rows = tbody.select("tr")
-            print(f"  tbody #{i+1} has {len(rows)} rows")
-            if len(rows) > max_rows:
-                max_rows = len(rows)
-                main_tbody = tbody
+        # Get all researcher links in the table for Google Scholar IDs
+        scholar_links = {}
+        profile_links = {}
+        area_mappings = {}
         
-        if main_tbody:
-            print(f"Found main tbody with {max_rows} rows")
-            
-            # Get all rows in the main tbody
-            researcher_rows = main_tbody.select("tr")
-            
-            # Optional limit for testing
-            if max_researchers:
-                researcher_rows = researcher_rows[:max_researchers]
-                print(f"Limiting to {max_researchers} researchers for testing")
-            
-            # Process each row
-            for row in researcher_rows:
-                try:
-                    # Get all cells in the row
-                    cells = row.select("td")
-                    
-                    # Skip rows that don't have enough cells
-                    if len(cells) < 3:  # We need at least name, institution, and areas
-                        continue
-                    
-                    # Extract researcher information
-                    name_cell = cells[0]
-                    institution_cell = cells[1]
-                    
-                    name_element = name_cell.select_one("a")
-                    
-                    # Skip non-researcher entries
-                    if not name_element:
-                        continue
-                    
-                    name = name_element.text.strip()
-                    profile_url = name_element.get('href', '').lower()
-                    institution = institution_cell.text.strip()
-                    
-                    # Remove any newlines and extra whitespace
-                    institution = ' '.join(institution.split())
-                    
-                    # Skip if this is a conference row
-                    if is_conference_row(name, profile_url, institution):
-                        print(f"Skipping conference-related entry: {name}")
-                        continue
-                    
-                    # Look for Google Scholar link in the row
-                    scholar_link = row.select_one("a[title*='Google Scholar']")
-                    scholar_id = None
-                    
-                    if scholar_link:
-                        href = scholar_link.get('href', '')
-                        scholar_id = extract_google_scholar_id(href)
-                    
-                    # Extract research areas
-                    area_elements = cells[2].select("span.hovertip")
-                    areas = [area.text.strip() for area in area_elements if area.text.strip()]
-                    
-                    # If the institution is just "Faculty", look up in our mapping
-                    if institution.lower() == "faculty":
-                        if name in researcher_institutions:
-                            institution = researcher_institutions[name]
-                        else:
-                            # Fallback: try to find by processing the div structure
-                            actual_institution = extract_institution_from_html(soup, name)
-                            if actual_institution:
-                                institution = actual_institution
-                    
-                    researcher = {
-                        'name': name,
-                        'institution': institution,
-                        'areas': areas,
-                        'profile_url': profile_url,
-                        'google_scholar_id': scholar_id
-                    }
-                    
-                    researchers.append(researcher)
-                    print(f"Added researcher: {name} from {institution}")
-                    
-                except Exception as e:
-                    print(f"Error extracting researcher data: {str(e)}")
-        else:
-            print("ERROR: Could not find main researcher table")
-            
+        # Find all researcher links and scholar links in the page
+        print("Gathering researcher links and scholar information...")
+        for row in soup.select("table.table-sm tr"):
+            # Look for name and Google Scholar info
+            name_link = row.select_one("td:nth-child(1) a")
+            if name_link and name_link.get('title') and 'Click for author' in name_link.get('title'):
+                name = name_link.text.strip()
+                profile_url = name_link.get('href', '').lower()
+                
+                # Skip if this is a conference row
+                if is_conference_row(name, profile_url, ""):
+                    continue
+                
+                profile_links[name] = profile_url
+                
+                # Look for Google Scholar link
+                scholar_link = row.select_one("a[title*='Google Scholar']")
+                if scholar_link:
+                    href = scholar_link.get('href', '')
+                    scholar_id = extract_google_scholar_id(href)
+                    if scholar_id:
+                        scholar_links[name] = scholar_id
+                
+                # Try to extract areas
+                area_cells = row.select("td:nth-child(3) span.hovertip")
+                if area_cells:
+                    areas = [area.text.strip() for area in area_cells if area.text.strip()]
+                    area_mappings[name] = areas
+        
+        print(f"Found {len(profile_links)} researcher profiles and {len(scholar_links)} Google Scholar IDs")
+        
+        # Create researcher entries from the institution mapping
+        for name, institution in researcher_institutions.items():
+            # Skip if we've reached the max researchers limit
+            if max_researchers is not None and processed_count >= max_researchers:
+                print(f"Reached maximum researchers limit ({max_researchers})")
+                break
+                
+            try:
+                # Skip if this researcher doesn't have a profile link
+                if name not in profile_links:
+                    continue
+                
+                profile_url = profile_links[name]
+                scholar_id = scholar_links.get(name)
+                areas = area_mappings.get(name, [])
+                
+                researcher = {
+                    'name': name,
+                    'institution': institution,
+                    'areas': areas,
+                    'profile_url': profile_url,
+                    'google_scholar_id': scholar_id
+                }
+                
+                researchers.append(researcher)
+                processed_count += 1
+                print(f"Added researcher #{processed_count}: {name} from {institution}")
+                
+            except Exception as e:
+                print(f"Error extracting data for {name}: {str(e)}")
+        
         print(f"Successfully extracted {len(researchers)} researchers")
         
         # Save to JSON
