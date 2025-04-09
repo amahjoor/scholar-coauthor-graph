@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const xmlbuilder = require('xmlbuilder');
 
 /**
  * Script to pre-generate graph data and save it to the public directory
@@ -70,6 +71,135 @@ function lightenColor(color, factor = 0.3) {
   
   // Convert back to hex
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+// Function to generate GEXF XML from the graph data
+function generateGexf(nodes, edges) {
+  // Create the GEXF document
+  const gexf = xmlbuilder.create('gexf', { version: '1.0', encoding: 'UTF-8' })
+    .att('version', '1.3')
+    .att('xmlns', 'http://www.gexf.net/1.3')
+    .att('xmlns:viz', 'http://www.gexf.net/1.3/viz')
+    .att('xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance')
+    .att('xsi:schemaLocation', 'http://www.gexf.net/1.3 http://www.gexf.net/1.3/gexf.xsd');
+  
+  // Add metadata
+  gexf.ele('meta')
+    .att('lastmodifieddate', new Date().toISOString().split('T')[0])
+    .ele('creator', 'ScholarMap Generator');
+  
+  // Create graph element
+  const graph = gexf.ele('graph')
+    .att('mode', 'static')
+    .att('defaultedgetype', 'undirected');
+  
+  // Define node attributes
+  const nodeAttrs = graph.ele('attributes')
+    .att('class', 'node')
+    .att('mode', 'static');
+  
+  nodeAttrs.ele('attribute')
+    .att('id', 'nodeType')
+    .att('title', 'NodeType')
+    .att('type', 'string');
+  
+  nodeAttrs.ele('attribute')
+    .att('id', 'community')
+    .att('title', 'Community')
+    .att('type', 'integer');
+  
+  nodeAttrs.ele('attribute')
+    .att('id', 'degree')
+    .att('title', 'Degree')
+    .att('type', 'integer');
+  
+  nodeAttrs.ele('attribute')
+    .att('id', 'affiliation')
+    .att('title', 'Affiliation')
+    .att('type', 'string');
+  
+  // Add nodes
+  const nodesElem = graph.ele('nodes');
+  
+  nodes.forEach(node => {
+    const nodeElem = nodesElem.ele('node')
+      .att('id', node.id)
+      .att('label', node.label);
+    
+    // Add node visualization attributes
+    nodeElem.ele('viz:color')
+      .att('r', parseInt(node.color.slice(1, 3), 16))
+      .att('g', parseInt(node.color.slice(3, 5), 16))
+      .att('b', parseInt(node.color.slice(5, 7), 16));
+    
+    nodeElem.ele('viz:size')
+      .att('value', node.size);
+    
+    // Add position - ensure all nodes have valid x,y coordinates
+    nodeElem.ele('viz:position')
+      .att('x', node.x || 0)
+      .att('y', node.y || 0)
+      .att('z', 0);
+    
+    // Add node attributes
+    const attvalues = nodeElem.ele('attvalues');
+    
+    attvalues.ele('attvalue')
+      .att('for', 'nodeType')
+      .att('value', node.type);
+    
+    attvalues.ele('attvalue')
+      .att('for', 'community')
+      .att('value', node.community);
+    
+    if (node.degree !== undefined) {
+      attvalues.ele('attvalue')
+        .att('for', 'degree')
+        .att('value', node.degree);
+    }
+    
+    if (node.affiliation) {
+      attvalues.ele('attvalue')
+        .att('for', 'affiliation')
+        .att('value', node.affiliation);
+    }
+  });
+  
+  // Add edges
+  const edgesElem = graph.ele('edges');
+  
+  edges.forEach((edge, index) => {
+    const edgeElem = edgesElem.ele('edge')
+      .att('id', index)
+      .att('source', edge.source)
+      .att('target', edge.target)
+      .att('weight', edge.weight);
+    
+    // Check if color is in hex or rgba format
+    if (edge.color.startsWith('#')) {
+      edgeElem.ele('viz:color')
+        .att('r', parseInt(edge.color.slice(1, 3), 16))
+        .att('g', parseInt(edge.color.slice(3, 5), 16))
+        .att('b', parseInt(edge.color.slice(5, 7), 16));
+    } else if (edge.color.startsWith('rgba')) {
+      // Parse rgba values
+      const rgbaMatch = edge.color.match(/rgba\((\d+),\s*(\d+),\s*(\d+),\s*([\d.]+)\)/);
+      if (rgbaMatch) {
+        const [_, r, g, b, a] = rgbaMatch;
+        edgeElem.ele('viz:color')
+          .att('r', r)
+          .att('g', g)
+          .att('b', b)
+          .att('a', parseFloat(a));
+      }
+    }
+    
+    edgeElem.ele('viz:thickness')
+      .att('value', edge.size);
+  });
+  
+  // Convert to XML string with pretty formatting
+  return gexf.end({ pretty: true });
 }
 
 async function generateGraphData() {
@@ -208,6 +338,11 @@ async function generateGraphData() {
       if (node.type === 'primary') {
         node.size = node.size * 1.5;
       }
+      
+      // Assign initial random positions to all nodes
+      // This ensures all nodes have valid coordinates
+      node.x = Math.random() * 100 - 50; // Random between -50 and 50
+      node.y = Math.random() * 100 - 50; // Random between -50 and 50
     });
     
     // Apply community detection
@@ -266,11 +401,18 @@ async function generateGraphData() {
       fs.mkdirSync(outputDir, { recursive: true });
     }
     
-    // Write to file
-    const outputPath = path.join(outputDir, 'graph-data.json');
-    fs.writeFileSync(outputPath, JSON.stringify(graphData, null, 2));
+    // 1. Generate and save JSON format (keep for compatibility)
+    const jsonOutputPath = path.join(outputDir, 'graph-data.json');
+    fs.writeFileSync(jsonOutputPath, JSON.stringify(graphData, null, 2));
+    console.log(`JSON graph data generated at ${jsonOutputPath}`);
     
-    console.log(`Static graph data generated successfully at ${outputPath}`);
+    // 2. Generate and save GEXF format (for better performance with large graphs)
+    console.log('Generating GEXF format...');
+    const gexfContent = generateGexf(graphData.nodes, graphData.edges);
+    const gexfOutputPath = path.join(outputDir, 'graph-data.gexf');
+    fs.writeFileSync(gexfOutputPath, gexfContent);
+    console.log(`GEXF graph data generated at ${gexfOutputPath}`);
+    
     console.log(`Total nodes: ${graphData.nodes.length}, Total edges: ${graphData.edges.length}`);
     
     return graphData;

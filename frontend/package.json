@@ -12,6 +12,7 @@
   "dependencies": {
     "graphology": "^0.26.0",
     "graphology-communities-louvain": "^2.0.2",
+    "graphology-gexf": "^0.13.2",
     "graphology-layout": "^0.6.1",
     "graphology-layout-forceatlas2": "^0.10.1",
     "next": "15.2.5",
@@ -25,6 +26,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "xmlbuilder": "^15.1.1"
   }
 }

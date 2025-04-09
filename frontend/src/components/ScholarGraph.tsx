@@ -2,6 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 
+// Declare the global window object with graphology property
+declare global {
+  interface Window {
+    graphology: any;
+  }
+}
+
 // Simple controls component
 interface ControlsProps {
   maxNodes: number;
@@ -91,7 +98,7 @@ export default function ScholarGraph() {
   const [minWeight, setMinWeight] = useState(1);
   
   // Full dataset reference (loaded once)
-  const [fullData, setFullData] = useState<{nodes: any[], edges: any[]} | null>(null);
+  const [fullData, setFullData] = useState<any | null>(null);
   
   // Stats for the graph
   const [stats, setStats] = useState({
@@ -128,8 +135,8 @@ export default function ScholarGraph() {
     }
   };
 
-  // Function to render the graph
-  const renderGraph = async (data: {nodes: any[], edges: any[]}) => {
+  // Function to render the graph with GEXF data
+  const renderGraph = async (graph: any) => {
     if (!containerRef.current) return;
     
     // First, ensure any existing renderer is cleaned up
@@ -139,63 +146,58 @@ export default function ScholarGraph() {
       // Wait a short delay to ensure DOM is ready after cleanup
       await new Promise(resolve => setTimeout(resolve, 50));
       
+      // Check if container has dimensions
+      const containerRect = containerRef.current.getBoundingClientRect();
+      console.log("Container dimensions:", containerRect.width, "x", containerRect.height);
+      
+      if (containerRect.width === 0) {
+        console.warn("Container has no width. Waiting for layout to complete...");
+        // Add a delay to allow the layout to complete
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      
       // Dynamically import libraries
-      const graphology = await import("graphology");
       const Sigma = (await import("sigma")).default;
+      const parsers = await import("graphology-gexf/browser");
       const forceAtlas2Default = await import('graphology-layout-forceatlas2');
       
       // ForceAtlas2 is the default export
       const forceAtlas2 = forceAtlas2Default.default;
       
-      // Create graph
-      const graph = new graphology.default();
+      // Ensure all nodes have valid coordinates before rendering
+      // This is a safety check in case some nodes are missing coordinates
+      let needsLayout = false;
       
-      // Process the data to ensure communities have distinct colors
-      const processedNodes = data.nodes.map(node => ({
-        ...node,
-        color: getColorForCommunity(node.community || 0)
-      }));
-      
-      // Add nodes
-      processedNodes.forEach((node) => {
-        // Add node with minimal attributes to avoid type issues
-        graph.addNode(node.id, {
-          label: node.label,
-          size: node.size,
-          color: node.color,
-          x: Math.random() * 2 - 1,
-          y: Math.random() * 2 - 1
-        });
+      graph.forEachNode((node: string, attributes: any) => {
+        if (typeof attributes.x !== 'number' || typeof attributes.y !== 'number' ||
+            isNaN(attributes.x) || isNaN(attributes.y)) {
+          needsLayout = true;
+          attributes.x = Math.random() * 100 - 50;
+          attributes.y = Math.random() * 100 - 50;
+        }
+        
+        // Store the node type as an attribute but ensure all nodes use the same program
+        // This prevents the "could not find a suitable program" error
+        if (attributes.type !== 'circle') {
+          attributes.nodeType = attributes.type || attributes.nodeType; // Store original type
+          attributes.type = 'circle';  // Set all nodes to use the circle program
+        }
       });
       
-      // Add edges
-      data.edges.forEach((edge) => {
-        if (graph.hasNode(edge.source) && graph.hasNode(edge.target)) {
-          try {
-            graph.addEdge(edge.source, edge.target, {
-              size: edge.size,
-              color: "#9370DB",
-              weight: edge.weight
-            });
-          } catch (e) {
-            // Skip duplicate edges
-            console.log('Skipping duplicate edge:', edge);
+      // Only run layout if coordinates are missing or on first load
+      if (needsLayout) {
+        console.log("Applying layout algorithm...");
+        forceAtlas2.assign(graph, {
+          iterations: 100,
+          settings: {
+            gravity: 3,
+            scalingRatio: 5,
+            strongGravityMode: true,
+            slowDown: 5
           }
-        }
-      });
-      
-      // Run layout algorithm
-      console.log("Running layout algorithm...");
-      forceAtlas2.assign(graph, {
-        iterations: 200,
-        settings: {
-          gravity: 3,
-          scalingRatio: 5,
-          strongGravityMode: true,
-          slowDown: 5
-        }
-      });
-      console.log("Layout complete");
+        });
+        console.log("Layout complete");
+      }
       
       // Make sure the container is still valid
       if (!containerRef.current) {
@@ -211,7 +213,11 @@ export default function ScholarGraph() {
         labelGridCellSize: 60,
         renderEdgeLabels: false,
         minCameraRatio: 0.1,
-        maxCameraRatio: 10
+        maxCameraRatio: 10,
+        // Use circle as the default node type (this is the Sigma default)
+        defaultNodeType: 'circle',
+        // Allow rendering even if container is not fully ready
+        allowInvalidContainer: true
       });
       
       // Store renderer reference
@@ -225,14 +231,17 @@ export default function ScholarGraph() {
       
       renderer.on('enterNode', ({ node }) => {
         const nodeData = graph.getNodeAttributes(node);
-        const originalNode = processedNodes.find((n) => n.id === node);
+        
+        // Access nodeType attribute from GEXF
+        // If nodeType is not available, fall back to type for compatibility
+        const authorType = nodeData.nodeType || nodeData.type || 'secondary';
         
         tooltipDiv.innerHTML = `
           <div class="font-bold">${nodeData.label}</div>
-          <div>Type: ${originalNode?.type === 'primary' ? 'Main Author' : 'Co-Author'}</div>
-          <div>Community: ${originalNode?.community || 0}</div>
-          <div>Connections: ${originalNode?.degree || 0}</div>
-          ${originalNode?.affiliation ? `<div>Affiliation: ${originalNode.affiliation}</div>` : ''}
+          <div>Type: ${authorType === 'primary' ? 'Main Author' : 'Co-Author'}</div>
+          <div>Community: ${nodeData.community || 0}</div>
+          <div>Connections: ${nodeData.degree || 0}</div>
+          ${nodeData.affiliation ? `<div>Affiliation: ${nodeData.affiliation}</div>` : ''}
         `;
         tooltipDiv.style.display = 'block';
         
@@ -266,27 +275,60 @@ export default function ScholarGraph() {
     }
   };
 
-  // Function to load static data and filter
-  const loadStaticData = async () => {
+  // Function to load and parse GEXF data
+  const loadGexfData = async () => {
     if (!containerRef.current) return;
     
     try {
       setLoading(true);
       setError(null);
       
-      // Load the static JSON data
-      const response = await fetch('/data/graph-data.json');
+      // Ensure DOM is fully loaded
+      if (document.readyState !== 'complete') {
+        console.log("Waiting for document to be fully loaded...");
+        await new Promise<void>((resolve) => {
+          const checkReadyState = () => {
+            if (document.readyState === 'complete') {
+              resolve();
+            } else {
+              setTimeout(checkReadyState, 100);
+            }
+          };
+          checkReadyState();
+        });
+      }
+      
+      // Load the GEXF data file
+      const response = await fetch('/data/graph-data.gexf');
       if (!response.ok) {
         throw new Error(`Failed to load graph data: ${response.statusText}`);
       }
       
-      const data = await response.json();
+      const gexfData = await response.text();
       
-      // Store the full dataset
-      setFullData(data);
+      // Import the GEXF parser and graphology
+      const graphology = await import("graphology");
+      const parsers = await import("graphology-gexf/browser");
       
-      // Apply filters
-      applyFilters(data);
+      // Parse the GEXF data
+      console.log("Parsing GEXF data...");
+      const graph = parsers.default.parse(graphology.default, gexfData);
+      console.log("GEXF data parsed successfully");
+      
+      // Store the graph for filtering
+      setFullData(graph);
+      
+      // Update stats
+      setStats({
+        nodeCount: graph.order,
+        edgeCount: graph.size,
+        communityCount: new Set(
+          graph.nodes().map((n: string) => graph.getNodeAttribute(n, 'community'))
+        ).size
+      });
+      
+      // Apply initial filters
+      applyFilters(graph);
       
     } catch (err) {
       console.error("Error loading graph data:", err);
@@ -295,53 +337,85 @@ export default function ScholarGraph() {
     }
   };
   
-  // Function to apply filters to dataset
-  const applyFilters = (sourceData?: {nodes: any[], edges: any[]}) => {
+  // Function to apply filters to the graph
+  const applyFilters = (sourceGraph?: any) => {
     setLoading(true);
     
-    // Use provided data or the stored full data
-    const data = sourceData || fullData;
-    if (!data) return;
-    
-    // Apply filters to the data
-    let filteredNodes = [...data.nodes];
-    
-    // Filter by max nodes (keep the largest ones by size/degree)
-    if (maxNodes > 0 && maxNodes < filteredNodes.length) {
-      filteredNodes = filteredNodes
-        .sort((a, b) => (b.size || 0) - (a.size || 0))
-        .slice(0, maxNodes);
-    }
-    
-    // Get IDs of nodes that passed the filter
-    const filteredNodeIds = new Set(filteredNodes.map(node => node.id));
-    
-    // Filter edges - keep only edges where both source and target are in filtered nodes
-    // and where the weight meets the minimum threshold
-    const filteredEdges = data.edges.filter(edge => 
-      filteredNodeIds.has(edge.source) && 
-      filteredNodeIds.has(edge.target) &&
-      edge.weight >= minWeight
-    );
-    
-    // Update stats
-    setStats({
-      nodeCount: filteredNodes.length,
-      edgeCount: filteredEdges.length,
-      communityCount: new Set(filteredNodes.map(n => n.community)).size
-    });
-    
-    // Render the filtered graph
-    renderGraph({nodes: filteredNodes, edges: filteredEdges});
+    setTimeout(async () => {
+      try {
+        // Use provided graph or the stored full data
+        const graph = sourceGraph || fullData;
+        if (!graph) return;
+        
+        // Import graphology
+        const graphology = await import("graphology");
+        
+        // Create a copy of the graph for filtering
+        const filteredGraph = graph.copy();
+        
+        // Filter by weight
+        if (minWeight > 1) {
+          // Remove edges with weight less than minWeight
+          filteredGraph.forEachEdge((edge: string, attributes: any, source: string, target: string) => {
+            if (attributes.weight < minWeight) {
+              filteredGraph.dropEdge(edge);
+            }
+          });
+        }
+        
+        // Filter by max nodes
+        if (maxNodes > 0 && maxNodes < filteredGraph.order) {
+          // Get all nodes with their degree
+          const nodes = filteredGraph.nodes().map((node: string) => ({
+            id: node,
+            degree: filteredGraph.degree(node)
+          }));
+          
+          // Sort by degree (highest first)
+          nodes.sort((a: {id: string, degree: number}, b: {id: string, degree: number}) => b.degree - a.degree);
+          
+          // Keep only the top maxNodes
+          const nodesToKeep = new Set(nodes.slice(0, maxNodes).map((n: {id: string}) => n.id));
+          
+          // Remove nodes not in the top maxNodes
+          filteredGraph.forEachNode((node: string) => {
+            if (!nodesToKeep.has(node)) {
+              filteredGraph.dropNode(node);
+            }
+          });
+        }
+        
+        // Update stats
+        setStats({
+          nodeCount: filteredGraph.order,
+          edgeCount: filteredGraph.size,
+          communityCount: new Set(
+            filteredGraph.nodes().map((n: string) => filteredGraph.getNodeAttribute(n, 'community'))
+          ).size
+        });
+        
+        // Render the filtered graph
+        await renderGraph(filteredGraph);
+      } catch (err) {
+        console.error("Error applying filters:", err);
+        setError(err instanceof Error ? err.message : "Unknown error");
+        setLoading(false);
+      }
+    }, 50);
   };
 
   // Initial load
   useEffect(() => {
     console.log("Initial component mount");
+    
     // Only run once, even in React strict mode which calls effects twice
     if (!isMountedRef.current) {
       isMountedRef.current = true;
-      loadStaticData();
+      
+      // Delay initial load to ensure DOM is ready
+      setTimeout(() => {
+        loadGexfData();
+      }, 200);
     }
     
     // Cleanup function
@@ -379,8 +453,8 @@ export default function ScholarGraph() {
         </div>
       </div>
       
-      {/* Sigma.js container */}
-      <div className="relative w-full h-[700px] bg-white border border-gray-200 rounded-lg shadow-md">
+      {/* Sigma.js container - Add explicit width and height styles */}
+      <div className="relative w-full h-[700px] bg-white border border-gray-200 rounded-lg shadow-md" style={{ minWidth: '100px', minHeight: '100px' }}>
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-10">
             <div className="text-xl font-semibold">Loading co-author network...</div>
