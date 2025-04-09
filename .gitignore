@@ -1,4 +1,5 @@
-direct_scraper.py
+/scrapers/direct_scraper.py
 /venv/
 /data/
 /scrapers/__pycache__
+/visualizations/__pycache__
