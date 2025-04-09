@@ -15,37 +15,152 @@ interface ControlsProps {
   setMinWeight: (value: number) => void;
   onApply: () => void;
   isLoading: boolean;
+  stats: {
+    nodeCount: number;
+    edgeCount: number;
+    communityCount: number;
+  };
 }
 
 function Controls({ 
   minWeight, 
   setMinWeight, 
   onApply, 
-  isLoading
+  isLoading,
+  stats
 }: ControlsProps) {
   return (
-    <div className="bg-white bg-opacity-90 p-4 rounded-lg shadow mb-4 flex flex-col md:flex-row gap-4 z-10">
-      <div className="flex flex-col">
-        <label htmlFor="minWeight" className="text-sm font-medium mb-1">Min Connection Strength</label>
-        <input
-          id="minWeight"
-          type="number"
-          min="1"
-          max="10"
-          value={minWeight}
-          onChange={(e) => setMinWeight(Number(e.target.value))}
-          className="border rounded px-2 py-1"
-        />
+    <div className="flex items-center flex-wrap gap-4 w-full">
+      {/* Filter controls */}
+      <div className="flex items-center gap-4">
+        <div className="flex flex-col">
+          <label htmlFor="minWeight" className="text-sm font-medium text-gray-700">Connection Strength Filter</label>
+          <div className="flex items-center gap-3">
+            <input
+              id="minWeightSlider"
+              type="range"
+              min="1"
+              max="10"
+              value={minWeight}
+              onChange={(e) => setMinWeight(Number(e.target.value))}
+              className="w-24 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
+            />
+            <div className="flex items-center gap-1">
+              <input
+                id="minWeight"
+                type="number"
+                min="1"
+                max="10"
+                value={minWeight}
+                onChange={(e) => setMinWeight(Number(e.target.value))}
+                className="border border-gray-300 rounded px-2 py-1 w-14 text-center"
+              />
+              <span className="text-xs text-gray-600 whitespace-nowrap">min papers</span>
+            </div>
+            <button 
+              onClick={onApply} 
+              disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded disabled:bg-blue-300 text-sm flex items-center gap-1"
+            >
+              {isLoading ? (
+                <span className="flex items-center">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Loading...
+                </span>
+              ) : (
+                <span className="flex items-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                  </svg>
+                  Apply
+                </span>
+              )}
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-1 max-w-xs">
+            Shows connections with at least {minWeight} paper{minWeight > 1 ? 's' : ''} together
+          </div>
+        </div>
       </div>
       
-      <div className="flex items-end">
-        <button 
-          onClick={onApply} 
-          disabled={isLoading}
-          className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-1 rounded disabled:bg-blue-300"
-        >
-          {isLoading ? 'Loading...' : 'Apply'}
-        </button>
+      {/* Divider */}
+      <div className="h-8 w-px bg-gray-300"></div>
+      
+      {/* Stats */}
+      <div className="flex items-center gap-4">
+        <div className="flex items-center gap-1 group relative" title="Total number of authors in the network">
+          <div className="flex items-center justify-center w-5 h-5">
+            <div className="w-4 h-4 rounded-full border border-gray-300 bg-gradient-to-b from-blue-500 via-purple-500 to-red-500 shadow-sm"></div>
+          </div>
+          <span className="text-sm font-medium text-gray-700">{stats.nodeCount.toLocaleString()} Authors</span>
+          <div className="absolute bottom-full left-0 mb-1 w-48 bg-black bg-opacity-75 text-white text-xs rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            Authors are represented as nodes in the graph
+          </div>
+        </div>
+        <div className="flex items-center gap-1 group relative" title="Total number of co-authorship connections">
+          <div className="flex items-center justify-center w-5 h-5">
+            <div className="w-5 h-0.5 bg-gray-300"></div>
+          </div>
+          <span className="text-sm font-medium text-gray-700">{stats.edgeCount.toLocaleString()} Connections</span>
+          <div className="absolute bottom-full left-0 mb-1 w-48 bg-black bg-opacity-75 text-white text-xs rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            Lines connecting authors who have published together
+          </div>
+        </div>
+        <div className="flex items-center gap-1 relative group" title="Number of detected research communities">
+          <div className="w-7 h-5 relative">
+            <div className="absolute w-2.5 h-2.5 rounded-full bg-blue-500 top-0 left-0 shadow-sm"></div>
+            <div className="absolute w-2.5 h-2.5 rounded-full bg-purple-500 top-2 left-2 shadow-sm"></div>
+            <div className="absolute w-2.5 h-2.5 rounded-full bg-green-500 top-0 left-4 shadow-sm"></div>
+          </div>
+          <span className="text-sm font-medium text-gray-700">{stats.communityCount.toLocaleString()} Communities</span>
+          <div className="absolute bottom-full left-0 mb-1 w-48 bg-black bg-opacity-75 text-white text-xs rounded p-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            Groups of authors who frequently collaborate (color-coded)
+          </div>
+        </div>
+      </div>
+      
+      {/* Divider */}
+      <div className="h-8 w-px bg-gray-300"></div>
+      
+      {/* Legend */}
+      <div className="flex items-center">
+        <details className="cursor-pointer group">
+          <summary className="font-medium text-sm flex items-center gap-1 marker:content-none text-gray-700">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-700">
+              <circle cx="12" cy="12" r="10"/>
+              <path d="M12 16v-4"/>
+              <path d="M12 8h.01"/>
+            </svg>
+            Legend
+          </summary>
+          <div className="absolute mt-2 p-3 bg-white rounded-lg shadow-lg border z-50 grid grid-cols-2 gap-3 w-[600px]">
+            <div className="p-2 rounded-lg border bg-gray-50">
+              <h3 className="font-bold text-sm flex items-center gap-1 text-gray-800">
+                <span className="inline-block w-3 h-3 bg-blue-600 rounded-full"></span> Color Coding
+              </h3>
+              <p className="text-xs text-gray-700">Each community has a unique color. Main authors have vibrant colors while co-authors have lighter shades.</p>
+            </div>
+            <div className="p-2 rounded-lg border bg-gray-50">
+              <h3 className="font-bold text-sm flex items-center gap-1 text-gray-800">
+                <span className="inline-block w-4 h-4 border border-gray-500 rounded-full"></span> Node Size
+              </h3>
+              <p className="text-xs text-gray-700">Node size represents the number of connections.</p>
+            </div>
+            <div className="p-2 rounded-lg border bg-gray-50 col-span-2">
+              <h3 className="font-bold text-sm flex items-center gap-1 text-gray-800">
+                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                  <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                </svg> Interaction
+              </h3>
+              <p className="text-xs text-gray-700">Click on any author to show only their direct collaborations. Click again to reset.</p>
+            </div>
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -70,6 +185,10 @@ const COLORS = [
   "#9932CC", // Dark Orchid
   "#228B22"  // Forest Green
 ];
+
+// Global constants for styling
+const EDGE_COLOR = "rgba(150, 150, 150, 0.7)"; // Medium gray with less transparency for default state
+const HIGHLIGHTED_EDGE_COLOR = "rgba(80, 80, 80, 0.9)"; // Darker gray with minimal transparency for highlighted state
 
 export default function ScholarGraph() {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -179,6 +298,16 @@ export default function ScholarGraph() {
         attributes.originalColor = attributes.color;
         attributes.originalSize = attributes.size;
       });
+
+      // Ensure all edges have consistent color
+      graph.forEachEdge((edge: string, attributes: any) => {
+        // Store the original color in case we need it
+        attributes.originalColor = attributes.color;
+        // Set a consistent color for all edges
+        attributes.color = EDGE_COLOR;
+        // Keep the original size which is based on weight (collaboration strength)
+        attributes.originalSize = attributes.size;
+      });
       
       // Only run layout if coordinates are missing or on first load
       if (needsLayout) {
@@ -281,7 +410,7 @@ export default function ScholarGraph() {
         
         graph.forEachEdge((e: string, attributes: any) => {
           attributes.hidden = false;
-          attributes.color = attributes.originalColor;
+          attributes.color = EDGE_COLOR; // Keep consistent edge color
           attributes.size = attributes.originalSize;
         });
         
@@ -342,8 +471,8 @@ export default function ScholarGraph() {
         // Hide edges not connected to the clicked node
         graph.forEachEdge((e: string, attributes: any, source: string, target: string) => {
           if (source === node || target === node) {
-            // Highlight edges connected to the clicked node
-            attributes.color = attributes.originalColor || attributes.color;
+            // Highlight edges connected to the clicked node with darker color
+            attributes.color = HIGHLIGHTED_EDGE_COLOR;
             attributes.size = (attributes.originalSize || attributes.size) * 1.5;
           } else {
             // Hide other edges
@@ -400,10 +529,7 @@ export default function ScholarGraph() {
     // Reset all edge attributes
     graph.forEachEdge((e: string, attributes: any) => {
       attributes.hidden = false;
-      
-      if (attributes.originalColor) {
-        attributes.color = attributes.originalColor;
-      }
+      attributes.color = EDGE_COLOR; // Keep consistent edge color
       
       if (attributes.originalSize) {
         attributes.size = attributes.originalSize;
@@ -568,17 +694,29 @@ export default function ScholarGraph() {
 
   return (
     <div className="relative w-full h-screen">
+      {/* Navbar */}
+      <div className="absolute top-0 left-0 right-0 z-20 bg-gradient-to-b from-gray-100 to-white shadow-md p-2 px-4 border-b">
+        {/* Controls for the graph */}
+        <Controls 
+          minWeight={minWeight}
+          setMinWeight={setMinWeight}
+          onApply={() => applyFilters()}
+          isLoading={loading}
+          stats={stats}
+        />
+      </div>
+      
       {/* Sigma.js container - Take full screen */}
-      <div className="absolute inset-0 bg-white" style={{ minWidth: '100px', minHeight: '100px' }}>
+      <div className="absolute inset-0 bg-gray-50 pt-12" style={{ minWidth: '100px', minHeight: '100px' }}>
         {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-10">
-            <div className="text-xl font-semibold">Loading co-author network...</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10">
+            <div className="text-xl font-semibold text-gray-800">Loading co-author network...</div>
           </div>
         )}
         
         {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-70 z-10">
-            <div className="text-xl font-semibold text-red-500">Error: {error}</div>
+          <div className="absolute inset-0 flex items-center justify-center bg-white bg-opacity-80 z-10">
+            <div className="text-xl font-semibold text-red-600">Error: {error}</div>
           </div>
         )}
         
@@ -587,60 +725,6 @@ export default function ScholarGraph() {
           className="w-full h-full"
           id="sigma-container"
         ></div>
-      </div>
-      
-      {/* Overlay controls in the top left */}
-      <div className="absolute top-4 left-4 z-20">
-        {/* Controls for the graph */}
-        <Controls 
-          minWeight={minWeight}
-          setMinWeight={setMinWeight}
-          onApply={() => applyFilters()}
-          isLoading={loading}
-        />
-      </div>
-      
-      {/* Graph stats as overlay in top right */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="bg-blue-50 bg-opacity-90 p-2 rounded-lg text-center">
-            <div className="text-lg font-bold">{stats.nodeCount}</div>
-            <div className="text-sm">Authors</div>
-          </div>
-          <div className="bg-green-50 bg-opacity-90 p-2 rounded-lg text-center">
-            <div className="text-lg font-bold">{stats.edgeCount}</div>
-            <div className="text-sm">Connections</div>
-          </div>
-          <div className="bg-purple-50 bg-opacity-90 p-2 rounded-lg text-center">
-            <div className="text-lg font-bold">{stats.communityCount}</div>
-            <div className="text-sm">Communities</div>
-          </div>
-        </div>
-        
-        {/* Legend as info icon that displays info on hover */}
-        <div className="bg-white bg-opacity-90 p-3 rounded-lg text-sm">
-          <details className="cursor-pointer">
-            <summary className="font-bold">Display Legend</summary>
-            <div className="mt-2 grid grid-cols-1 gap-2">
-              <div className="bg-blue-100 p-2 rounded-lg">
-                <h3 className="font-bold">Color Coding</h3>
-                <p>Each community has a unique color. Main authors have vibrant colors while co-authors have lighter shades.</p>
-              </div>
-              <div className="bg-amber-100 p-2 rounded-lg">
-                <h3 className="font-bold">Node Size</h3>
-                <p>Node size represents the number of connections.</p>
-              </div>
-              <div className="bg-purple-100 p-2 rounded-lg">
-                <h3 className="font-bold">Edge Darkness</h3>
-                <p>Darker edges indicate stronger collaborations.</p>
-              </div>
-              <div className="bg-gray-100 p-2 rounded-lg">
-                <h3 className="font-bold">Interaction</h3>
-                <p>Click on any author to show only their direct collaborations. Click again to reset.</p>
-              </div>
-            </div>
-          </details>
-        </div>
       </div>
     </div>
   );
