@@ -1,3 +1,4 @@
 direct_scraper.py
 /venv/
 /data/
+/scrapers/__pycache__

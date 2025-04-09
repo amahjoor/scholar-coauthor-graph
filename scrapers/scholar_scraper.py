@@ -13,7 +13,7 @@ def get_coauthors(author_name=None, author_id=None):
     try:
         if author_id:
             print(f"Searching for author with ID: {author_id}")
-            author = scholarly.get_author_by_id(author_id)
+            author = scholarly.search_author_id(author_id)
         elif author_name:
             print(f"Searching for author: {author_name}")
             search_query = scholarly.search_author(author_name)
