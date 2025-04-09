@@ -240,6 +240,7 @@ def scrape_csrankings(area=None, country=None, output_file="csrankings_data.json
         
         # Save the HTML content to a file for inspection
         html_file = "data/csrankings_page.html"
+        os.makedirs(os.path.dirname(html_file), exist_ok=True)
         with open(html_file, "w", encoding="utf-8") as f:
             f.write(page_source)
         print(f"Saved HTML content to {html_file}")
@@ -345,6 +346,9 @@ def scrape_csrankings(area=None, country=None, output_file="csrankings_data.json
                 print(f"Error extracting data for {name}: {str(e)}")
         
         print(f"Successfully extracted {len(researchers)} researchers")
+        
+        # Create directory if it doesn't exist
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
         
         # Save to JSON
         with open(output_file, 'w') as f:
