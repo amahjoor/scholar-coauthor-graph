@@ -190,7 +190,7 @@ const COLORS = [
 const EDGE_COLOR = "rgba(150, 150, 150, 0.7)"; // Medium gray with less transparency for default state
 const HIGHLIGHTED_EDGE_COLOR = "rgba(80, 80, 80, 0.9)"; // Darker gray with minimal transparency for highlighted state
 
-export default function ScholarGraph() {
+export default function ScholarGraph({ graphType = 'author' }: { graphType?: 'author' | 'institution' }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -198,8 +198,9 @@ export default function ScholarGraph() {
   // Graph configuration state
   const [minWeight, setMinWeight] = useState(1);
   
-  // Full dataset reference (loaded once)
-  const [fullData, setFullData] = useState<any | null>(null);
+  // Full dataset reference (loaded once for each graph type)
+  const [authorGraphData, setAuthorGraphData] = useState<any | null>(null);
+  const [institutionGraphData, setInstitutionGraphData] = useState<any | null>(null);
   
   // Stats for the graph
   const [stats, setStats] = useState({
@@ -221,6 +222,63 @@ export default function ScholarGraph() {
   useEffect(() => {
     highlightedNodeRef.current = highlightedNode;
   }, [highlightedNode]);
+
+  // Load graph data based on the selected graph type
+  useEffect(() => {
+    // Clean up any existing renderer when graph type changes
+    if (sigmaRef.current) {
+      cleanupRenderer();
+    }
+    
+    // Reset state
+    setLoading(true);
+    setError(null);
+    setHighlightedNode(null);
+    
+    // Load the appropriate data file
+    const loadGraphData = async () => {
+      try {
+        // Determine file path based on graph type
+        const dataPath = graphType === 'author' 
+          ? '/data/graph-data.gexf'
+          : '/data/institution-graph-data.gexf';
+        
+        console.log(`Loading ${graphType} graph data from ${dataPath}`);
+        
+        // Import parsers and parse GEXF
+        const parsers = await import("graphology-gexf/browser");
+        const response = await fetch(dataPath);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to load ${graphType} graph data: ${response.statusText}`);
+        }
+        
+        const gexfContent = await response.text();
+        
+        // Parse GEXF to graph
+        const graphology = await import("graphology");
+        const Graph = graphology.default;
+        const graph = parsers.parse(Graph, gexfContent);
+        
+        // Store the full dataset in state
+        if (graphType === 'author') {
+          setAuthorGraphData(graph);
+        } else {
+          setInstitutionGraphData(graph);
+        }
+        
+        // Apply filters and render
+        applyFilters(graph);
+      } catch (err) {
+        console.error("Error loading graph data:", err);
+        setError(err instanceof Error ? err.message : "Failed to load graph data");
+        setLoading(false);
+      }
+    };
+    
+    // Load graph data
+    loadGraphData();
+  }, [graphType]); // Re-run when graph type changes
   
   // Function to get a color for a community
   const getColorForCommunity = (communityId: number): string => {
@@ -554,68 +612,6 @@ export default function ScholarGraph() {
     return color;
   };
 
-  // Function to load and parse GEXF data
-  const loadGexfData = async () => {
-    if (!containerRef.current) return;
-    
-    try {
-      setLoading(true);
-      setError(null);
-      
-      // Ensure DOM is fully loaded
-      if (document.readyState !== 'complete') {
-        console.log("Waiting for document to be fully loaded...");
-        await new Promise<void>((resolve) => {
-          const checkReadyState = () => {
-            if (document.readyState === 'complete') {
-              resolve();
-            } else {
-              setTimeout(checkReadyState, 100);
-            }
-          };
-          checkReadyState();
-        });
-      }
-      
-      // Load the GEXF data file
-      const response = await fetch('/data/graph-data.gexf');
-      if (!response.ok) {
-        throw new Error(`Failed to load graph data: ${response.statusText}`);
-      }
-      
-      const gexfData = await response.text();
-      
-      // Import the GEXF parser and graphology
-      const graphology = await import("graphology");
-      const parsers = await import("graphology-gexf/browser");
-      
-      // Parse the GEXF data
-      console.log("Parsing GEXF data...");
-      const graph = parsers.default.parse(graphology.default, gexfData);
-      console.log("GEXF data parsed successfully");
-      
-      // Store the graph for filtering
-      setFullData(graph);
-      
-      // Update stats
-      setStats({
-        nodeCount: graph.order,
-        edgeCount: graph.size,
-        communityCount: new Set(
-          graph.nodes().map((n: string) => graph.getNodeAttribute(n, 'community'))
-        ).size
-      });
-      
-      // Apply initial filters
-      applyFilters(graph);
-      
-    } catch (err) {
-      console.error("Error loading graph data:", err);
-      setError(err instanceof Error ? err.message : "Unknown error");
-      setLoading(false);
-    }
-  };
-  
   // Function to apply filters to the graph
   const applyFilters = (sourceGraph?: any) => {
     setLoading(true);
@@ -625,8 +621,12 @@ export default function ScholarGraph() {
     
     setTimeout(async () => {
       try {
-        // Use provided graph or the stored full data
-        const graph = sourceGraph || fullData;
+        // Use provided graph or get the correct stored data based on graph type
+        let graph = sourceGraph;
+        if (!graph) {
+          graph = graphType === 'author' ? authorGraphData : institutionGraphData;
+        }
+        
         if (!graph) return;
         
         // Import graphology
@@ -670,27 +670,6 @@ export default function ScholarGraph() {
       }
     }, 50);
   };
-
-  // Initial load
-  useEffect(() => {
-    console.log("Initial component mount");
-    
-    // Only run once, even in React strict mode which calls effects twice
-    if (!isMountedRef.current) {
-      isMountedRef.current = true;
-      
-      // Delay initial load to ensure DOM is ready
-      setTimeout(() => {
-        loadGexfData();
-      }, 200);
-    }
-    
-    // Cleanup function
-    return () => {
-      console.log("Component unmounting, cleaning up");
-      cleanupRenderer();
-    };
-  }, []);
 
   return (
     <div className="relative w-full h-screen">
