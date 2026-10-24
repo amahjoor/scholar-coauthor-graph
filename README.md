@@ -1,191 +1,73 @@
-# ScholarMap - Academic Research Tools
+# Scholar coauthor graph
 
-ScholarMap is a project for scraping and visualizing academic collaboration networks from Google Scholar data. The project includes tools for scraping researcher information from CS Rankings and Google Scholar, as well as creating various visualizations of the resulting coauthor networks.
+An interactive graph of computer science coauthors, plus a second view of the same collaborations grouped by institution. The site is Next.js and sigma.js. It loads a graph that already ships in this repo: 8,118 authors, 10,167 coauthor edges, and 612 institutions.
 
-## Set-Up and Installation
+Python scrapers can rebuild that graph from [CSRankings](https://csrankings.org/) and public Google Scholar profiles. Google Scholar rate-limits requests. The pipeline waits between 2 and 5 seconds. A CAPTCHA or a block means stop and try later. Do not commit scraped output. `backend/data/` is gitignored.
 
-1. Clone this repository
-2. Set up a virtual environment:
+## Quick start
+
+Node.js 18.18 or newer.
+
+```bash
+git clone https://github.com/amahjoor/scholar-coauthor-graph.git
+cd scholar-coauthor-graph/frontend
+npm install
+npm run dev
 ```
-python -m venv venv
-source venv/bin/activate # on MacOS. Windows, figure it out (forgot and too lazy to add!)
+
+Open http://localhost:3000. Author Network is the default. Institution Network is the other button. Click an author to keep only their connections, and click that author again, or empty space, to reset.
+
+`npm run dev` does not need the scrapers. The files it reads are `frontend/public/data/graph-data.gexf` and `frontend/public/data/institution-graph-data.gexf`.
+
+## Rebuild the graph
+
+Python packages are in the root `requirements.txt`: requests, beautifulsoup4, lxml, scholarly, selenium, webdriver-manager, pandas, tqdm, networkx, matplotlib, python-louvain, scipy, and plotly.
+
+```bash
+python -m venv .venv
 ```
-3. Install the required dependencies:
-```
+
+Windows: `.venv\Scripts\activate`. macOS and Linux: `source .venv/bin/activate`. Then:
+
+```bash
 pip install -r requirements.txt
+cd backend
+python scrapers/csrankings_scraper.py --browser chrome --output data/csrankings_data.json --max-researchers 20
+python scrapers/scraping_pipeline.py --input data/csrankings_data.json --output-dir data/coauthors --max 20
+cd ../frontend
+node scripts/generate-graph-data.js
+npm run dev
 ```
 
-## Components
+`--browser` defaults to Safari. Safari needs Develop > Allow Remote Automation. Use `--browser chrome` everywhere else. `--area` and `--country` filter CSRankings, for example `--area AI --country USA`.
 
-### Scrapers
+`generate-graph-data.js` reads `backend/data/coauthors/*_coauthors.json`, which is why the commands above run from `backend/`.
 
-- **csrankings_scraper.py**: Scrapes researcher information from [CSRankings](https://csrankings.org/)
-- **scholar_scraper.py**: Scrapes coauthor information from Google Scholar
-- **scraping_pipeline.py**: Connects the two scrapers to create a comprehensive dataset
-
-### Visualization Tools
-
-- **visualizations/visualize_coauthor_network.py**: Creates static network visualizations with various layouts
-- **visualizations/interactive_coauthor_viz.py**: Creates an interactive HTML visualization of the coauthor network
-- **visualizations/institution_network_viz.py**: Creates an interactive visualization of institution collaborations
-
-### Utility Scripts
-
-- **visualizations/create_visualizations.sh**: A shell script to generate all visualization types with a single command
-
-## Google Scholar Coauthor Scraper
-
-### Primary Scraper (using scholarly library)
-
-You can run the scraper with either an author's name or their Google Scholar ID:
-
-#### Search by name:
-```
-python scholar_scraper.py --name "Albert Einstein"
-```
-
-#### Search by Google Scholar ID:
-```
-python scholar_scraper.py --id "EmD_lTEAAAAJ"
-```
-
-#### Custom output file:
-```
-python scholar_scraper.py --name "Albert Einstein" --output einstein_coauthors.json
-```
-
-### Alternative Direct Scraper
-
-If the scholarly library isn't working, you can use the direct scraper which uses BeautifulSoup:
-
-```
-python direct_scraper.py --id "EmD_lTEAAAAJ"
-```
-
-```
-python direct_scraper.py --id "EmD_lTEAAAAJ" --output einstein_direct.json
-```
-
-## CSRankings Scraper
-
-The CSRankings scraper extracts information about computer science researchers from the CSRankings website.
-
-### Basic Usage
-
-```
-python csrankings_scraper.py
-```
-
-### Filtering Options
-
-#### Filter by research area:
-```
-python csrankings_scraper.py --area "AI"
-```
-
-#### Filter by country:
-```
-python csrankings_scraper.py --country "USA"
-```
-
-#### Custom output file:
-```
-python csrankings_scraper.py --area "AI" --country "USA" --output ai_us_researchers.json
-```
-
-### Google Scholar ID Extraction
-
-The scraper automatically extracts Google Scholar IDs directly from the CSRankings page when available. These IDs are included in the output data.
-
-### Browser Options
-
-The scraper supports both Safari and Chrome browsers. Safari is the default on macOS:
-
-```
-python csrankings_scraper.py --browser safari
-```
-
-To use Chrome (if installed):
-```
-python csrankings_scraper.py --browser chrome
-```
-
-#### Safari Setup
-
-Before using Safari with the scraper, you need to enable the developer menu and allow remote automation:
-
-1. Open Safari
-2. Go to Safari > Preferences > Advanced
-3. Check "Show Develop menu in menu bar"
-4. Go to the Develop menu and check "Allow Remote Automation"
-
-## Finding a Google Scholar ID
-
-1. Go to a researcher's Google Scholar profile
-2. Look at the URL, which will have a format like: `https://scholar.google.com/citations?user=EmD_lTEAAAAJ`
-3. The part after `user=` is the ID (in this example, `EmD_lTEAAAAJ`)
-
-## Creating Visualizations
-
-To create all visualization types at once:
+One profile, without CSRankings:
 
 ```bash
-./visualizations/create_visualizations.sh [output_dir] [max_nodes]
+cd backend/scrapers
+python scholar_scraper.py --id EmD_lTEAAAAJ --output ../data/einstein_coauthors.json
 ```
 
-Or create specific visualizations:
+`direct_scraper.py --id` is the BeautifulSoup fallback when the `scholarly` package fails. It also takes `--id` and `--output`.
 
-1. Static network visualization:
+## Static plots
 
-```bash
-python visualizations/visualize_coauthor_network.py --input data/coauthors --output-dir data/network_viz/static
-```
-
-2. Interactive coauthor network:
+From `backend/`, after `data/coauthors/` exists:
 
 ```bash
+python visualizations/visualize_coauthor_network.py --input data/coauthors --output-dir data/network_viz
 python visualizations/interactive_coauthor_viz.py --input data/coauthors --output data/network_viz/interactive_network.html
-```
-
-3. Institution network:
-
-```bash
 python visualizations/institution_network_viz.py --input data/coauthors --output data/network_viz/institution_network.html
 ```
 
-## Visualization Options
+`visualize_coauthor_network.py` accepts `--layout spring`, `kamada_kawai`, or `circular`, and `--viz-max-nodes` (default 500). The institution plot accepts `--min-authors` (default 2) and `--normalize`.
 
-Each visualization script supports various options:
+## Contributing
 
-- `--min-weight`: Minimum number of connections for an edge to be included
-- `--max-nodes`: Maximum number of nodes to include in the graph
-- `--viz-max-nodes`: Maximum number of nodes to show in the visualization
-- `--layout`: Layout algorithm to use (spring, kamada_kawai, circular) for static visualizations
+See [CONTRIBUTING.md](CONTRIBUTING.md). UI changes can use the graph already in `frontend/public/data/`.
 
-For the institution network visualization:
-- `--min-authors`: Minimum number of authors for an institution to be included
-- `--normalize`: Normalize edge weights by institution size
+## License
 
-## Output
-
-The scripts generate JSON and CSV files containing researcher information with these details:
-- Name
-- Institution
-- Research Areas
-- Profile URL
-- Google Scholar ID (when available)
-- Coauthors (when available)
-
-### Data Files
-
-- `data/csrankings_data.json`: Researcher data from CSRankings
-- `data/coauthors/`: Directory containing individual coauthor JSON files
-- `data/network_viz/`: Directory containing network visualizations
-
-## Notes
-
-- Google Scholar has rate limiting, so making too many requests might trigger CAPTCHA challenges
-- The scholarly library helps manage this, but if you need to extract data for many authors, consider adding delays
-- If you repeatedly get errors, Google may have temporarily blocked your IP
-- For the CSRankings scraper, you need either Safari (with developer options enabled) or Chrome installed
-- The institution network visualization attempts to identify institutions from coauthors' affiliations 
+[MIT](LICENSE)

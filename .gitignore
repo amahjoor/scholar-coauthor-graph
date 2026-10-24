@@ -46,3 +46,9 @@
 # typescript
 /frontend/*.tsbuildinfo
 /frontend/next-env.d.ts
+
+node_modules/
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
